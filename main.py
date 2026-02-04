@@ -1,33 +1,43 @@
-import os, sys
+import argparse
+import os
+
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+
 def main():
+    parser = argparse.ArgumentParser(description="AI Code Assistant")
+    parser.add_argument("user_prompt", type=str, help="Prompt to send to Gemini")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
+    args = parser.parse_args()
+
     load_dotenv()
     api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY environment variable not set")
+
     client = genai.Client(api_key=api_key)
-    if len(sys.argv) <= 1:
-        print("Error: Please provide a prompt as a command line argument.", file=sys.stderr)
-        sys.exit(1)
-    prompt = sys.argv[1]
+    messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)])]
+    if args.verbose:
+        print(f"User prompt: {args.user_prompt}\n")
 
-    messages = [
-        types.Content(role="user", parts=[types.Part(text=prompt)]),
-    ]
+    generate_content(client, messages, args.verbose)
 
+
+def generate_content(client, messages, verbose):
     response = client.models.generate_content(
-        model='gemini-2.0-flash', contents=messages
+        model="gemini-2.5-flash",
+        contents=messages,
     )
-    usage = response.usage_metadata
+    if not response.usage_metadata:
+        raise RuntimeError("Gemini API response appears to be malformed")
 
-    if len(sys.argv) >= 3 and sys.argv[2] == "--verbose":
-        print(f"User prompt: {prompt}")
-    
+    if verbose:
+        print("Prompt tokens:", response.usage_metadata.prompt_token_count)
+        print("Response tokens:", response.usage_metadata.candidates_token_count)
+    print("Response:")
     print(response.text)
-    if len(sys.argv) >= 3 and sys.argv[2] == "--verbose":
-        print(f"Prompt tokens: {usage.prompt_token_count}")
-        print(f"Response tokens: {usage.candidates_token_count}") 
 
 
 if __name__ == "__main__":
